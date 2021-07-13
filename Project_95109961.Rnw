@@ -1,0 +1,386 @@
+\documentclass[a4paper]{article}
+\usepackage{url,amsmath,setspace,amssymb,tikz,graphicx,mathtools}
+\usetikzlibrary{arrows}
+\usepackage{amsfonts}
+\usepackage{enumerate}
+\usepackage{hyperref}
+\renewcommand{\labelenumi}
+{\addtocounter{enumi}{0}(\alph{enumi}}
+\setcounter{enumi}{0}
+\usepackage{Sweave}
+\setkeys{Gin}{width=1.1\textwidth}
+\usepackage{xepersian}
+\settextfont{HM XNiloofar}
+\setdigitfont{HM XNiloofar}
+\title{
+	به نام او
+\\
+پروژهٔ تحلیل رگرسیون  
+	\\
+	دکتر صفدری
+	\\
+	نیمسال دوم ۹۸-۹۹
+		}
+\author{محمدحسین کلهرجهاندوست\\۹۵۱۰۹۹۶۱}
+\date{}
+\begin{document}
+\maketitle
+\SweaveOpts{concordance=TRUE}
+\hrule
+\hrule
+\hrule
+\hrule
+\vspace*{10pt}
+\begin{itemize}
+\item[❊]
+کتابخانه های مورد استفاده در طول تمرین:
+<<>>=
+library(MASS)
+library(dplyr)
+library(readr)
+library(ggplot2)
+library(ISLR)
+library(class)
+library(gam)
+library(ggthemes)
+library (leaps)
+library(ROCR)
+@
+\item[❊]
+\lr{seed}
+را برابر ۱۰۰ قرار می دهیم:
+<<>>=
+set.seed(100)
+@
+\item[❊]
+توجه کنید که محیط
+\lr{RStudio}
+از نیم فاصله پشتیبانی نمی کند. بنابراین در متن فارسی نیم فاصله رعایت نشده است. با توجه به این موضوع به جای «ی» بدل از کسره، در مواردی که به «هـ» پایانی ختم می شود از «همزه» استفاده شده است.
+\end{itemize}
+\section{طبقه بندی}
+\subsection{خواندن و توضیح داده}
+\paragraph*{}
+ابتدا داده را می خوانیم و تغییرات لازم را انجام می دهیم.
+<<>>=
+data = read_csv("epl.csv")
+epl = data %>% select(-X1)
+epl$FTR = ifelse(epl$FTR == 'H',0,1)
+epl$HTR = ifelse(epl$HTR == 'H',0,1)
+@
+
+\paragraph*{}
+برای طبقه بندی،
+\href{https://www.kaggle.com/saife245/english-premier-league}{دادهٔ لیگ برتر انگلیس}
+از استفاده شده است. با توجه به این که هر فصل داده های خاص خودش را داشت، از ستون های مشترکی که در همهٔ فصل ها بود استفاده کردیم و یک دادهٔ جدید با $ 7260 $ مشاهده و $ 22 $ ستون به نام
+\lr{epl}
+ساختیم. جدول
+\ref{table:1}
+توضیح ستون های داده است.
+
+\begin{table}[h!]
+	\centering
+		\begin{tabular}{ ||c||c|| }
+		\hline
+		نام ستون & توضیح \\
+		\hline
+		\lr{Date} & تاریخ برگزاری بازی\\
+		\hline
+		\lr{HomeTeam} & نام تیم میزبان\\
+		\hline
+		\lr{AwayTeam} & نام تیم میهمان\\
+		\hline
+		\lr{FTHG} & تعداد گل زدهٔ تیم میزبان در کل بازی\\
+		\hline
+		\lr{FTAG} & تعداد گل زدهٔ تیم میهمان در کل بازی\\
+		\hline
+		\lr{FTR} & نتیجهٔ نهایی بازی\\
+		\hline
+		\lr{HTHG} & تعداد گل زدهٔ تیم میزبان در نیمهٔ اول\\
+		\hline
+		\lr{HTHG} & تعداد گل زدهٔ تیم میهمان در نیمهٔ اول\\
+		\hline
+		\lr{HTR} & نتیجهٔ بازی در نیمهٔ اول\\
+		\hline
+		\lr{Refree} & نام داور مسابقه\\
+		\hline
+		\lr{HS} & تعداد ضربه های تیم میزبان\\
+		\hline
+		\lr{AS} & تعداد ضربه های تیم میهمان\\
+		\hline
+		\lr{HST} & تعداد ضربه های درچارچوب تیم میزبان\\
+		\hline
+		\lr{AST} & تعداد ضربه های درچارچوب تیم میهمان\\
+		\hline
+		\lr{HC} & تعداد کرنرهای تیم میزبان\\
+		\hline
+		\lr{AC} & تعداد کرنرهای تیم میهمان\\
+		\hline
+		\lr{HF} & تعداد خطاهای تیم میزبان\\
+		\hline
+		\lr{AF} & تعداد خطاهای تیم میهمان\\
+		\hline
+		\lr{HY} & تعداد کارت های زرد تیم میزبان\\
+		\hline
+		\lr{AY} & تعداد کارت های زرد تیم میهمان\\
+		\hline
+		\lr{HR} & تعداد کارت های قرمز تیم میزبان\\
+		\hline
+		\lr{AR} & تعداد کارت های قرمز تیم میهمان\\
+		\hline
+	\end{tabular}
+	\caption{ستون های دادهٔ \lr{epl}}
+	\label{table:1}
+\end{table}
+
+\subsection{توضیح مسئله}
+\paragraph*{}
+شاید بتوان گفت لیگ برتر انگلیس، جذاب ترین لیگ فوتبال است. مقایسهٔ برخی
+\href{https://visual.ly/community/Infographics/sports/european-football-league-comparisons}{آمارها}
+مثل تعداد دنبال کنندگان نیز این موضوع را نشان می دهد. این توصیف از لیگ برتر انگلیس بسیار متداول است که در یک بازی هیچ تیمی از پیش باخته نیست؛ هر چند این بازی بین تیم صدر و قعر جدول باشد.
+\vspace{-10pt}
+\paragraph*{}
+یک سوال طبیعی در مواجهه با یک مسابقه که بین دو تیم برگزار می شود این است که در پایان مسابقه چه تیمی برنده خواهد شد. البته این سوال صورت بندی دقیقی ندارد. چون در مسئلهٔ طبقه بندی، متغیر هدف چند سطح مشخص دارد و مدلی که روی داده برازش می شود مشخص می کند که اگر متغیرهای پیش بینی کننده مقدار مشخصی بگیرند در این صورت متغیر هدف در کدام دسته قرار خواهد گرفت. بنابراین می توان صورت سوال رو به این شکل درآورد: برندهٔ بازی تیم مهمان است یا میزبان یا بازی بدون برنده (مساوی) است؟ تحت چه شرایطی هر کدام از حالت های گفته شده رخ می دهد؟ بنابراین در مسئلهٔ طبقه بندی متغیر هدف ما ستون
+\lr{FTR}
+خواهد بود.
+
+\subsection{کاوش داده و انتخاب متغیرهای پیشگو}
+\paragraph*{}
+برای انتخاب پیشگوها از برخی از نمودارها و مدل ها کمک می گیریم. در ابتدا باید برخی از ستون ها که مشخصا به طور مستقیم روی ستون هدف اثر می گذارند را کنار بگذاریم. مثلا ستون هدف یعنی
+\lr{FTR}
+دقیقا از تفاضل گل های زدهٔ تیم میزبان و میهمان در کل بازی، یعنی دو ستون
+\lr{FTHG}
+و
+\lr{FTAG}،
+مشخص می شود. چون تیم برنده تیمی است که گل زدهٔ بیشتری داشته باشد. بنابراین ستون های زیر را کنار می گذاریم:
+<<>>=
+epldf = epl %>% select(-Div,-Date,-Referee,
+                       -FTHG,-FTAG,-HTHG,-HTAG
+                       ,-HomeTeam,-AwayTeam,-HTR)
+
+@
+قبل از استفاده از ابزارهای آماری، سعی می کنیم به عنوان یک بینندهٔ فوتبال حدس بزنیم کدام یک از ستون های داده، با ستون هدف ارتباط دارد. برای این کار باید حدس بزنیم که هر کدام از ستون ها چه ارتباطی با افزایش گل (یا گل خوردن) دارد زیرا چیزی که در نهایت برنده را مشخص می کند تفاضل گل  دو تیم است. مثلا ضربات در چارچوب رابطهٔ جدی با گل زدن دارد. به این معنی که هر چقدر ضربات در چارچوب بیشتر باشد احتمالا گل زده هم بیشتر می شود و بنابراین شانس برنده شدن بیشتر می شود. یا مثلا هر چقدر کرنر (و به طور عمومی تر ضربات شروع مجدد که اطلاعتی از آن ها در داده نیست) بیشتر باشد حدس می زنیم گل زده هم بیشتر شود زیرا کرنر جز موقعیت های مناسب گل زنی به شمار می رود. در مورد خطاها می توان گفت هر چقدر خطاها بیشتر باشد احتمال باختن بیشتر است. زیرا خطاها ممکن است در قسمت هایی از زمین انجام شود که  موقعیت مناسبی برای گل کردن ضربات ایستگاهی باشد و به طور خاص مثلا پنالتی. در مورد تعداد کارت های زرد هم همین تحلیل وجود دارد. در مورد کارت قرمز علاوه بر تحلیل گفته شده حدس می زنیم تاثیر بیشتر باشد. زیرا با اخراج شدن یک بازیکن از زمین مسابقه فشار تیم مقابل بیشتر می شود و احتمال برنده شدن تیم مقابل بیشتر می شود. حالا با این توضیحات شاید مناسب باشد همبستگی ستون هدف با سایر ستون های داده را ببینیم:\\
+<<>>=
+cor(epldf)[1,]
+@
+نتایچ بالا نشان می دهد حدس ما دربارهٔ ضربات در چارچوب تا حدی درست بوده است. یعنی ضربات در چارچوب تیم میزبان هر چقدر بیشتر باشد احتمال برد تیم میهمان کمتر است و به طور مشابه ضربات در چارچوب تیم میهمان هر چقدر بیشتر باشد احتمال برد تیم میهمان بیشتر است. چند نمودار در این رابطه در ادامه آمده است. نمودار اول نمودار جعبه ای تعداد ضربات در چارچوب تیم میزبان بر حسب بردن یا نبردن تیم میهمان است:
+<<fig=TRUE>>=
+ggplot(data = epl,aes(x=as.factor(FTR),y=HST))+
+  geom_boxplot(aes(fill = factor(FTR)))+
+  labs(y="HST",x="FTR")+scale_fill_discrete(name = "FTR")
+@
+همانطور که قابل مشاهده است، میانگین ضربات در چارچوب تیم میزبان در هنگام برد میزبان بیشتر از میانگین ضربات در چارچوب تیم میزبان در زمان باخت تیم میزبان است که با شهود اولیهٔ ما سازگار است. نمودار دوم نیز نمودار جعبه ای تعداد ضربات در چارچوب تیم میهمان بر حسب بردن یا نبردن تیم میزبان است:
+<<fig=TRUE>>=
+ggplot(data = epl,aes(x=as.factor(FTR),y=AST))+
+  geom_boxplot(aes(fill = factor(FTR)))+
+  labs(y="AST",x="FTR")+
+  scale_fill_discrete(name = "FTR")
+@
+مانند نمودار قبل نیز این نمودار با حس اولیهٔ ما سازگار است. میانیگین ضربات در چارچوب تیم میهمان در زمان باخت تیم میزبان کمتر از این میانگین در زمان نبردن تیم میزبان است. نمودار بعدی نیز نمودا نقطه ای
+\lr{\textit{HST}}
+بر حسب
+\lr{\textit{AST}}
+است و رنگ نقاط نیز نشان دهندهٔ بردن یا نبردن میزبان
+(\lr{\textit{FTR}})
+است:
+<<fig=TRUE>>=
+ggplot(data = epl,aes(x=AST,y=HST))+
+  geom_point(aes(col=as.factor(FTR)))+
+  labs(y="HST",x="AST")+
+  scale_color_discrete(name = "FTR")
+@
+این نمودار هم نشان می دهد که در زیر خط
+$ x=y $
+که ضربات در چارچوب مهمان بیشتر از میزبان است غالبا تیم میزبان برنده نبوده است. همچنین در بالای خط
+$ x=y $
+که ضربات در چارچوب میزبان بیشتر از میهمان بوده است غالبا میزبان برنده بوده است.
+\paragraph*{}
+اما در مورد بقیهٔ ستون ها نتیجهٔ محاسبهٔ همبستگی ناامید کننده است. به این معنی که شاید بقیهٔ ستون ها توضیح دهندهٔ خیلی خوبی برای متغیر هدف نیستند. برای بهتر مشخص شدن این موضوع یک رگرسیون لجستیک روی داده برازش می کنیم تا ببینیم ضرایب کدام متغیرها از لحاظ آماری معنادار نیستند.
+<<>>=
+model = glm(FTR~.,data = epldf,family = "binomial")
+summary(model)
+@
+با توجه به نتیجهٔ مدل، ضرایب
+\lr{HS}،
+\lr{HST}،
+\lr{AST}،
+\lr{HC}،
+\lr{AC}،
+\lr{AS}،
+\lr{HY}،
+\lr{HR}
+و
+\lr{AR}
+از لحاظ آماری معنادار هستتند. در واقع با این کار می توانیم بقیهٔ ضرایب را که از لحاظ آماری معنادار نیستند، کنار بگذاریم اما در مورد آن ها که معنی دار هستند نمی توانیم به طور قطعی نظری دهیم. اگر از روش
+\lr{forward selection}
+استفاده کنیم به نتیجهٔ مشابه می رسیم:
+<<fig=TRUE>>=
+regfit.fwd = regsubsets(FTR~., data= epldf , nvmax =19,
+                        method ="forward")
+summary(regfit.fwd)
+mod.summary = summary(regfit.fwd)
+par(mfrow = c(2, 2))
+plot(mod.summary$cp, xlab = "Number of variables",
+     ylab = "C_p", type = "l")
+points(which.min(mod.summary$cp),
+       mod.summary$cp[which.min(mod.summary$cp)],
+       col = "red", cex = 2, pch = 20)
+plot(mod.summary$bic, xlab = "Number of variables",
+     ylab = "BIC", type = "l")
+points(which.min(mod.summary$bic),
+       mod.summary$bic[which.min(mod.summary$bic)],
+       col = "red", cex = 2, pch = 20)
+plot(mod.summary$adjr2, xlab = "Number of variables",
+     ylab = "Adjusted R^2",
+     type = "l")
+points(which.max(mod.summary$adjr2),
+       mod.summary$adjr2[which.max(mod.summary$adjr2)],
+       col = "red", cex = 2, pch = 20)
+@
+دقت کنید نتیجهٔ روش
+\lr{backward selection}
+و
+\lr{best subset selection}
+نیز مشابه همین بود. به نظر می رسد با توجه به نمودارهای بالا، انتخاب هشت پیشگو مناسب باشد. حتی به نظر می رسد می توان
+\lr{HS}
+را هم کنار گذاشت. چون تقریبا با
+\lr{HST}
+رابطه دارد و
+همانطور که از نتیجهٔ مدل لجستیک پیداست از بقیهٔ ضرایب معنادار کم اهمیت تر است و در روش
+\lr{forward selection}
+نیز در مرحلهٔ هشتم اضافه شده است. پس دست آخر به هفت متغیر زیر به عنوان پیشگو می رسیم:
+\begin{equation*}
+	\text{\lr{FTR}} \sim\text{\lr{HST}}+\text{\lr{AST}}+\text{\lr{HC}}+\text{\lr{AC}}+\text{\lr{HY}}+\text{\lr{HR}}+\text{\lr{AR}}
+\end{equation*}
+<<>>=
+newModel = glm(FTR~HST+AST+HC+AC+HY+HR+AR,data = epldf,family = "binomial")
+summary(newModel)
+@
+\subsection{انتخاب مدل و محاسبهٔ دقت}
+\paragraph*{}
+	برای انتخاب مدل تحلیل خاصی وجود ندارد که ما را برای استفاده از یک مدل خاص ترغیب کند یا بتوان با تقریب خوبی گفت که مدلی مناسب دادهٔ ما نیست. مثلا اگر رابطهٔ واقعی به خطی نزدیک باشد انتظار داریم روش های پارامتری مثل لجستیک و
+	\lr{LDA}
+	بهتر از روش های غیرپارامتری مثل
+	\lr{KNN}
+	عمل کنند. و برعکس اگر رابطهٔ واقعی خیلی غیرخطی باشد روش
+	\lr{KNN}
+	عملکرد بهتری خواهد داشت. اما در حال حاضر حدس یا حسی نسبت به این «رابطهٔ واقعی» نداریم. در ادامه رگرسیون لجستیک، روش
+	\lr{QDA}
+	و روش
+	\lr{KNN}
+	را به کار می گیریم. چون روش
+	\lr{LDA}
+	و روش لجستیک تقریبا مشابه هستند از آن صرف نظر می کنیم. ابتدا داده را به دو بخش آموزش و آزمون تقسیم می کنیم و در هر سه مدل از همین داده ها استفاده می کنیم.
+<<>>=
+epldf = epl %>% select(FTR,HST,AST,HC,AC,HY,HR,AR)
+n = nrow(epldf)
+train_samples = sample(n,0.8*n)
+trainEpl = epldf[train_samples,]
+testEpl = epldf[-train_samples,]
+@
+\subsubsection{رگرسیون لجستیک}
+<<fig=TRUE>>=
+
+logModel = glm(FTR~HST+AST+HC+AC+HY+HR+AR,
+               data = trainEpl,family = "binomial")
+log.pred = ifelse(predict(logModel,testEpl %>% select(-FTR),
+                          type="response") > 0.29,1,0)
+logPred = predict(logModel,testEpl %>% select(-FTR),
+                          type="response")
+log.res = log.pred == testEpl$FTR
+table(log.pred,testEpl$FTR)
+mean(log.res)
+tpr = c()
+fpr = c()
+#Long run time
+for (i in seq(from = 50,to = 900,by = 1)){
+  th=i/1000
+logModel = glm(FTR~HST+AST+HC+AC+HY+HR+AR,
+               data = trainEpl,family = "binomial")
+log.pred = ifelse(predict(logModel,testEpl %>% select(-FTR),
+                          type="response") > th,1,0)
+
+fpr[i-49]=table(log.pred,testEpl$FTR)[1,2]/
+  (table(log.pred,testEpl$FTR)[1,2]+
+     table(log.pred,testEpl$FTR)[1,1])
+tpr[i-49]=table(log.pred,testEpl$FTR)[2,2]/
+  (table(log.pred,testEpl$FTR)[2,2]+
+     table(log.pred,testEpl$FTR)[2,1])
+}
+rocLog = cbind(tpr,fpr)
+rocLog = as.data.frame(rocLog)
+ggplot(data = rocLog,aes(x=fpr,y=tpr))+geom_line()
+
+logPred = predict(logModel,testEpl %>% select(-FTR),
+                          type="response")
+ROCRpred <- prediction(logPred, testEpl$FTR)
+ROCRperf <- performance(ROCRpred, 'tpr','fpr')
+plot(ROCRperf, colorize = TRUE, text.adj = c(-0.2,1.7))
+@
+\subsubsection{روش \lr{QDA}}
+<<fig=TRUE>>=
+qdaModel = qda(FTR~HST+AST+HC+AC+HY+HR+AR,data = trainEpl)
+qda.pred = predict(qdaModel,testEpl %>% select(-FTR))
+predictions = qda.pred$class
+accuracy = sum(testEpl$FTR == predictions)/length(predictions)
+accuracy
+tprQda = c()
+fprQda = c()
+#Long run time
+for (i in seq(from = 50,to = 900,by = 1)){
+th=i/1000
+qdaModel = qda(FTR~HST+AST+HC+AC+HY+HR+AR,data = trainEpl)
+qda.pred = predict(qdaModel,testEpl %>% select(-FTR))
+qda.pred$class = ifelse(qda.pred$posterior[,2]>th,1,0)
+fprQda[i-49]=table(qda.pred$class,testEpl$FTR)[1,2]/
+  (table(qda.pred$class,testEpl$FTR)[1,2]+
+     table(log.pred,testEpl$FTR)[1,1])
+tprQda[i-49]=table(qda.pred$class,testEpl$FTR)[2,2]/
+  (table(qda.pred$class,testEpl$FTR)[2,2]+
+     table(log.pred,testEpl$FTR)[2,1])
+}
+rocQda = cbind(tprQda,fprQda)
+rocQda = as.data.frame(rocQda)
+ggplot(data = rocQda,aes(x=fprQda,y=tprQda)) + geom_line()
+@
+\subsubsection{روش \lr{KNN}}
+<<fig=TRUE>>=
+knn.pred = knn(trainEpl,testEpl,trainEpl$FTR,k=10,prob = TRUE)
+tabl = table(knn.pred,testEpl$FTR)
+acc = (tabl[1,1]+tabl[2,2])/1452
+acc
+probs = attr(knn.pred,"prob")
+tprKnn = c()
+fprKnn = c()
+#Long run time
+for (i in seq(from = 600,to = 950,by = 1)){
+  th=i/1000
+knn.pred = ifelse(probs >= th,1,0)
+fprKnn[i-599]=table(knn.pred,testEpl$FTR)[1,2]/
+  (table(knn.pred,testEpl$FTR)[1,2]+
+     table(log.pred,testEpl$FTR)[1,1])
+tprKnn[i-599]=table(knn.pred,testEpl$FTR)[2,2]/
+  (table(knn.pred,testEpl$FTR)[2,2]+
+     table(log.pred,testEpl$FTR)[2,1])
+}
+rocKnn = cbind(tprKnn,fprKnn)
+rocKnn = as.data.frame(rocLog)
+ggplot(data = rocLog,aes(y=tpr,x=fpr))+geom_line()
+@
+با توجه به نتایج بالا به نظر می رسد روش
+\lr{KNN-10}
+از همه بهتر باشد. دقت کنید برای
+$ k=1,\ldots,10 $
+دقت محاسبه شد که در همین حدود بود و طبق گفتهٔ کتاب که به صورت تجربی
+$ k=5 $
+و
+$ k=10 $
+را پیشنهاد می دهد این مدل انتخاب شد. توجه کنید نمودار
+\lr{ROC}
+مدل لجستیک با همین نمودار برای
+\lr{KNN}
+تفاوت چندانی نمی کند اما دقت روش
+\lr{KNN}
+بیشتر است.
+\paragraph{}
+با توجه به نتایج بالا طبق آنچه در درس آموختیم و با توجه به کتاب این حالتی که پیش آمده نشان از آن دارد که رابطهٔ واقعی جامعه غیرخطی است. (مطابق سناریو ۶ صفحهٔ ۱۵۲ کتاب)
+\end{document}
